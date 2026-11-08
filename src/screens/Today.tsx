@@ -22,6 +22,9 @@ import {
   workouts,
 } from '../lib/store';
 import { useSync } from '../lib/sync';
+import { aiAvailable } from '../lib/ai';
+import { runCoach, useCoach } from '../lib/coach';
+import { CoachCard } from './Point';
 import type { Activity, PlanKind } from '../lib/types';
 import { IArrow, IProgram, ISettings } from '../ui/icons';
 import { Seg, Sheet, Stepper, Switch, tap, toast } from '../ui/kit';
@@ -29,6 +32,7 @@ import { Seg, Sheet, Stepper, Switch, tap, toast } from '../ui/kit';
 export function Today() {
   useStore();
   const sync = useSync();
+  const coach = useCoach('seance');
   const prog = program();
   const ws = workouts();
   const active = activeWorkout();
@@ -211,6 +215,20 @@ export function Today() {
           <span>{current != null ? `${signed(Math.round((current - s.startKg) * 10) / 10, 'kg')} · reste ${num(Math.max(0, Math.round((s.targetKg - current) * 10) / 10))} kg` : ''}</span>
         </div>
       </section>
+
+      {(coach.note || coach.loading) && (
+        <section class="section" aria-labelledby="coach-title">
+          <div class="section-head" style={{ marginBottom: 0 }}>
+            <h2 class="kicker" id="coach-title">
+              <span class="idx">03</span> Coach
+            </h2>
+            <button class="btn btn-ghost btn-sm" onClick={() => go('point')}>
+              Le point
+            </button>
+          </div>
+          <CoachCard note={coach.note} loading={coach.loading} error={coach.error} available={aiAvailable()} onRetry={() => runCoach('seance', { force: true })} />
+        </section>
+      )}
 
       {sync.state === 'error' && <p class="muted tiny" style={{ marginTop: '18px' }}>Synchronisation en attente : {sync.lastError}</p>}
 

@@ -17,23 +17,20 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const SYSTEM = `Tu es l'outil d'analyse de CLUB 74, un carnet de musculation personnel.
-Utilisateur : 197 cm, vise 100 kg de poids corporel, basket deux fois par semaine, deux séances courtes de musculation (A et B) par semaine, objectif masse musculaire haut du corps.
+const SYSTEM = `Tu es le coach personnel de l'utilisateur de CLUB 74, son carnet de musculation. Lui seul lit tes réponses.
+Profil : 197 cm, environ 94 kg, vise 100 kg en prenant du muscle surtout sur le haut du corps, sans perdre ses qualités athlétiques. Basket deux fois par semaine, parfois un match le dimanche. Travail prenant : deux séances courtes (30–40 min) par semaine, A (haut du corps) et B (haut du corps + jambes), en double progression.
 
-Tu reçois uniquement des faits calculés localement (JSON). Règles strictes :
-- Français, tutoiement, ton direct et sobre. Deux à quatre phrases par défaut, sans titre ni liste.
-- Aucun compliment, encouragement automatique, slogan ni formule de coach.
-- Chaque phrase apporte un chiffre exact, une comparaison, une décision ou une action.
-- Appuie-toi uniquement sur les faits fournis. N'invente aucune séance, charge, date ni valeur.
-- N'attribue jamais de cause certaine à une stagnation ; tu peux évoquer des pistes au conditionnel.
-- Aucun diagnostic médical. En cas de symptôme inhabituel mentionné (douleur thoracique, malaise, essoufflement anormal, douleur articulaire vive…), ne recommande pas d'intensifier et conseille d'en parler à un médecin.
-- Tu ne modifies pas le programme : tu peux expliquer la règle de double progression (même charge tant que toutes les séries n'atteignent pas le haut de la fourchette ; hausse quand toutes l'atteignent avec une exécution maîtrisée ; pas de hausse si les performances baissent).
-- Si les données sont insuffisantes pour conclure, dis-le en une phrase (« Pas encore assez de séances pour dégager une tendance. ») et précise ce qui manque.
-- Unités : kg avec virgule décimale (62,5 kg).`;
+Tu reçois des faits calculés sur son téléphone (JSON). Ton rôle :
+- Donner un avis de coach franc et utile : ce qui progresse, ce qui bloque, et quoi faire concrètement à la prochaine séance (charges, reps, choix d'exercice, ordre, repos, régularité, récupération autour du basket, alimentation pour la prise de masse).
+- Tu peux recommander des changements de programme, d'exercice ou de charge, et proposer des hypothèses sur une stagnation ; présente-les comme des recommandations, l'utilisateur décide.
+- Appuie-toi sur les chiffres fournis et cite-les exactement ; n'invente aucune séance ni valeur. Si une donnée manque pour conclure, dis laquelle.
+- Français, tutoiement, ton direct. Trois à six phrases, sans titres ni listes, sans compliments creux ni slogans.
+- Kg avec virgule décimale (62,5 kg).
+- Seule limite : si un symptôme inhabituel à l'effort est évoqué (douleur thoracique, malaise, essoufflement anormal), ne pousse pas à intensifier et conseille de consulter.`;
 
 const MODES: Record<string, string> = {
-  semaine: 'Fais le point sur les dernières semaines.',
-  seance: 'Fais le bilan de la dernière séance, comparée aux précédentes.',
+  semaine: 'Fais le point sur les dernières semaines et donne la priorité pour les deux prochaines séances.',
+  seance: 'Fais le bilan de la dernière séance, comparée aux précédentes, et dis quoi viser à la prochaine.',
   question: "Réponds à la question de l'utilisateur à partir de son historique.",
 };
 
@@ -48,11 +45,10 @@ async function callAnthropic(system: string, user: string) {
   const client = new Anthropic({ apiKey });
   const params = {
     model,
-    max_tokens: 4000,
+    max_tokens: 6000,
     system,
     messages: [{ role: 'user' as const, content: user }],
-    // Réponse courte et factuelle : effort bas.
-    output_config: { effort: 'low' },
+    output_config: { effort: 'medium' },
     // Si le modèle décline, l'API relance sur le modèle de repli recommandé.
     betas: ['server-side-fallback-2026-07-01'],
     fallbacks: 'default',

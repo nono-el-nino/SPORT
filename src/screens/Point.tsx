@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'preact/hooks';
-import { aiAvailable, askPoint, type PointAnswer, type PointMode } from '../lib/ai';
-import { computeFacts, localSummary } from '../lib/facts';
-import { dateLong } from '../lib/format';
+import { useState } from 'preact/hooks';
+import { aiAvailable } from '../lib/ai';
+import { currentFacts, runCoach, useCoach } from '../lib/coach';
+import { localSummary } from '../lib/facts';
+import { dateLong, dateShort } from '../lib/format';
 import { entryComparisons } from '../lib/session';
-import { activities, program, settings, useStore, weights, workouts } from '../lib/store';
+import { program, useStore, workouts } from '../lib/store';
 import { back } from '../router';
 import { IBack } from '../ui/icons';
 import { Seg } from '../ui/kit';
@@ -12,13 +13,12 @@ export function Point() {
   useStore();
   const [mode, setMode] = useState<'semaine' | 'seance'>('semaine');
   const [question, setQuestion] = useState('');
-  const [answer, setAnswer] = useState<PointAnswer | null>(null);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const coach = useCoach(mode, true);
+  const qa = useCoach('question');
 
   const prog = program();
   const ws = workouts();
-  const facts = useMemo(() => computeFacts(prog, ws, weights(), activities(), settings()), [ws.length, weights().length, activities().length]);
+  const facts = currentFacts();
   const lastDone = ws.find((w) => w.status === 'done');
 
   const local =
@@ -31,19 +31,6 @@ export function Point() {
         : ['Aucune séance terminée.'];
 
   const av = aiAvailable();
-
-  const ask = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const m: PointMode = question.trim() ? 'question' : mode;
-      setAnswer(await askPoint(facts, m, settings().aiProvider, question));
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div class="screen">
@@ -67,65 +54,86 @@ export function Point() {
             ['semaine', 'Dernières semaines'],
             ['seance', 'Dernière séance'],
           ]}
-          onChange={(m) => {
-            setMode(m);
-            setAnswer(null);
-          }}
+          onChange={setMode}
         />
       </div>
 
+      <CoachCard note={coach.note} loading={coach.loading} error={coach.error} available={av} onRetry={() => runCoach(mode, { force: true })} />
+
       <div class="point-card">
         <div class="point-src">
-          <i /> Bilan local · calculé sur l'appareil
+          <i /> Chiffres · calculés sur l'appareil
         </div>
         {local.map((l) => (
-          <p>{l}</p>
+          <p class="small">{l}</p>
         ))}
       </div>
 
-      <section class="section">
-        <div class="section-head">
-          <h2 class="kicker">
-            <span class="idx">IA</span> Regard personnalisé
+      {av.ok && (
+        <section class="section">
+          <h2 class="kicker" style={{ marginBottom: '12px' }}>
+            <span class="idx">?</span> Une question
           </h2>
-        </div>
-        <label class="field">
-          <span>Question (facultatif)</span>
-          <textarea class="input" value={question} maxLength={600} placeholder="Pourquoi le couché stagne-t-il ?" onInput={(e) => setQuestion((e.target as HTMLTextAreaElement).value)} />
-        </label>
-        <button class="btn btn-primary btn-block btn-xl" disabled={!av.ok || loading} onClick={ask}>
-          {loading ? 'Analyse…' : answer ? 'Relancer l’analyse' : 'Demander l’analyse'}
-        </button>
-        <p class="muted tiny" style={{ marginTop: '8px' }}>
-          {av.ok ? 'Appel payant, uniquement sur ton action. Seuls les faits chiffrés ci-dessous sont transmis.' : av.reason}
-        </p>
-        {error && (
-          <p class="small" style={{ color: 'var(--red-lo)', marginTop: '10px' }}>
-            {error}
-          </p>
-        )}
-        {answer && (
-          <div class="point-card">
-            <div class="point-src">
-              <i class="ai" /> {answer.provider === 'openai' ? 'OpenAI' : 'Anthropic'} · {answer.model}
+          <textarea class="input" value={question} maxLength={600} placeholder="Comment relancer le couché ?" onInput={(e) => setQuestion((e.target as HTMLTextAreaElement).value)} />
+          <button class="btn btn-primary btn-block" style={{ marginTop: '12px' }} disabled={!question.trim() || qa.loading} onClick={() => runCoach('question', { question: question.trim(), force: true })}>
+            {qa.loading ? 'Réflexion…' : 'Demander'}
+          </button>
+          {qa.note && (
+            <div class="point-card">
+              <div class="point-src">
+                <i class="ai" /> {qa.note.question}
+              </div>
+              {qa.note.text
+                .split(/\n+/)
+                .filter(Boolean)
+                .map((p) => (
+                  <p>{p}</p>
+                ))}
             </div>
-            {answer.text
-              .split(/\n+/)
-              .filter(Boolean)
-              .map((p) => (
-                <p>{p}</p>
-              ))}
-          </div>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+export function CoachCard({
+  note,
+  loading,
+  error,
+  available,
+  onRetry,
+}: {
+  note?: { text: string; at: number };
+  loading: boolean;
+  error: string;
+  available: { ok: boolean; reason?: string };
+  onRetry?: () => void;
+}) {
+  if (!available.ok && !note) return <p class="muted tiny" style={{ marginTop: '14px' }}>{available.reason}</p>;
+  return (
+    <div class="point-card">
+      <div class="point-src" style={{ justifyContent: 'space-between' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <i class="ai" /> Coach{note ? ` · ${dateShort(note.at)}` : ''}
+        </span>
+        {onRetry && available.ok && (
+          <button class="btn btn-ghost btn-sm" style={{ minHeight: '28px', padding: '0 4px' }} disabled={loading} onClick={onRetry}>
+            {loading ? 'Analyse…' : 'Relancer'}
+          </button>
         )}
-        <details style={{ marginTop: '18px' }}>
-          <summary class="muted small" style={{ cursor: 'pointer' }}>
-            Données transmises
-          </summary>
-          <pre class="tiny" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'var(--text)', color: 'var(--ink-2)' }}>
-            {JSON.stringify(facts, null, 1)}
-          </pre>
-        </details>
-      </section>
+      </div>
+      {note ? (
+        note.text
+          .split(/\n+/)
+          .filter(Boolean)
+          .map((p) => <p>{p}</p>)
+      ) : loading ? (
+        <p class="muted">Analyse en cours…</p>
+      ) : (
+        <p class="muted small">{error || 'Pas encore de séance à analyser.'}</p>
+      )}
+      {note && error && <p class="tiny" style={{ color: 'var(--red-lo)', marginTop: '8px' }}>{error}</p>}
     </div>
   );
 }

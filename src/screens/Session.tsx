@@ -14,6 +14,7 @@ import {
   validateSet,
   workoutStats,
 } from '../lib/session';
+import { runCoach } from '../lib/coach';
 import { activeWorkout, program, saveWorkout, settings, useStore, workouts } from '../lib/store';
 import type { EntryLog, Workout } from '../lib/types';
 import { go } from '../router';
@@ -442,6 +443,8 @@ function Finish({ w, onBack }: { w: Workout; onBack: () => void }) {
     const hasSets = st.sets > 0;
     await saveWorkout({ ...w, notes: notes.trim() || undefined, status: hasSets ? 'done' : 'abandoned', endedAt: Date.now() });
     toast(hasSets ? 'Séance enregistrée.' : 'Aucune série validée : séance non comptée.');
+    // Bilan du coach en arrière-plan, affiché sur « Aujourd'hui ».
+    if (hasSets) void runCoach('seance');
     go('today', true);
   };
 

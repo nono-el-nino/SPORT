@@ -110,7 +110,7 @@ export function SettingsScreen() {
           onChange={(v) => set({ aiProvider: v })}
         />
         <p class="muted tiny" style={{ marginTop: '10px' }}>
-          Les clés API restent sur le serveur (fonction Supabase). Aucun appel sans action de ta part.
+          Les clés API restent sur le serveur. L'analyse se met à jour seule après chaque séance.
         </p>
       </section>
 

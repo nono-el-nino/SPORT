@@ -1,0 +1,3 @@
+# Configuration minimale pour `supabase functions deploy le-point`.
+[functions.le-point]
+verify_jwt = true
